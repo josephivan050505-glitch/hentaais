@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hentai Vault - Colección Exclusiva</title>
+    <!-- Google Fonts: Outfit (Titles) & Inter (Body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Background glowing ambient effects -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-icon">🔮</span>
+                <div class="logo-text">
+                    <h1>Hentai Vault</h1>
+                    <p class="subtitle">Solo lo mejor, filtrado y clasificado</p>
+                </div>
+            </div>
+            
+            <!-- Quick Stats Panel -->
+            <div class="stats-panel" id="stats-panel">
+                <div class="stat-card" id="stat-total">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label">Guardados</span>
+                </div>
+                <div class="stat-card" id="stat-avg">
+                    <span class="stat-value">0.0</span>
+                    <span class="stat-label">Promedio ★</span>
+                </div>
+                <div class="stat-card" id="stat-top-tag">
+                    <span class="stat-value">-</span>
+                    <span class="stat-label">Tag Favorito</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- TOOLBAR (Filters, search, sort & actions) -->
+        <section class="toolbar-section">
+            <div class="toolbar-top">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" placeholder="Buscar por título, tag o notas..." aria-label="Buscar enlaces">
+                </div>
+                
+                <button type="button" class="btn btn-primary" id="btn-open-modal">
+                    <span class="btn-icon">＋</span> Agregar Enlace
+                </button>
+            </div>
+
+            <div class="toolbar-filters">
+                <div class="category-tabs-container">
+                    <span class="filter-label">Categorías:</span>
+                    <div class="category-tabs" id="category-tabs">
+                        <button type="button" class="tab-btn active" data-category="all">Todos</button>
+                        <button type="button" class="tab-btn" data-category="Serie">Series</button>
+                        <button type="button" class="tab-btn" data-category="OVA">OVAs</button>
+                        <button type="button" class="tab-btn" data-category="Manga">Mangas</button>
+                        <button type="button" class="tab-btn" data-category="Juego">Juegos</button>
+                        <button type="button" class="tab-btn" data-category="Otro">Otros</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label for="sort-by" class="filter-label">Ordenar por:</label>
+                    <select id="sort-by" class="select-control">
+                        <option value="rating-desc">Mejor Valorados ★</option>
+                        <option value="date-desc">Recientes Primero</option>
+                        <option value="date-asc">Antiguos Primero</option>
+                        <option value="title-asc">A-Z</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group tag-filters-container">
+                    <span class="filter-label">Filtrar por Tag:</span>
+                    <div id="quick-tags-container" class="quick-tags-wrapper">
+                        <!-- Dynamic tag filters will be loaded here -->
+                        <span class="no-tags-tip">No hay etiquetas activas</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- HERO FEATURED SECTION -->
+        <section class="hero-section hidden" id="hero-featured">
+            <!-- Dynamic featured content banner -->
+        </section>
+
+        <!-- MAIN CONTENT (GRID OF LINKS) -->
+        <main class="main-content">
+            <div class="grid-header">
+                <h2 id="collection-title">Mi Selección de Hentais</h2>
+                <span class="items-count" id="items-count-display">Mostrando 0 enlaces</span>
+            </div>
+            
+            <!-- Cards Grid -->
+            <div class="links-grid" id="links-grid">
+                <!-- Dynamically populated card items -->
+            </div>
+
+
+            <!-- Empty State -->
+            <div class="empty-state hidden" id="empty-state">
+                <div class="empty-icon">📂</div>
+                <h3>¡Tu bóveda está vacía!</h3>
+                <p>Comienza a añadir tus hentais favoritos para no volver a perder el tiempo buscando.</p>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-empty-add">Agregar tu primer enlace</button>
+            </div>
+        </main>
+
+        <!-- FOOTER & SYSTEM OPERATIONS -->
+        <footer class="app-footer">
+            <div class="footer-info">
+                <p>© 2026 Hentai Vault. Local Storage Privado. Hecho para conocedores.</p>
+            </div>
+            <div class="footer-actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-export">
+                    <span>📤</span> Exportar Datos
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-import-trigger">
+                    <span>📥</span> Importar Copia
+                </button>
+                <input type="file" id="import-file-input" class="hidden" accept=".json">
+                <button type="button" class="btn btn-danger btn-sm" id="btn-reset-data">
+                    <span>⚠️</span> Borrar Todo
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- MODAL FORM (ADD / EDIT LINK) -->
+    <div class="modal-overlay hidden" id="link-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-title">Agregar Nuevo Hentai</h3>
+                <button type="button" class="btn-close" id="btn-close-modal" aria-label="Cerrar modal">×</button>
+            </div>
+            <form id="link-form" autocomplete="off">
+                <input type="hidden" id="entry-id">
+                
+                <div class="form-group">
+                    <label for="entry-title">Título <span class="required">*</span></label>
+                    <input type="text" id="entry-title" placeholder="Ej. Bible Black, Euphoria, etc." required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="entry-category">Categoría <span class="required">*</span></label>
+                        <select id="entry-category" required>
+                            <option value="Serie">Serie</option>
+                            <option value="OVA">OVA</option>
+                            <option value="Manga">Manga / Dōjinshi</option>
+                            <option value="Juego">Juego / VN</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Valoración (★) <span class="required">*</span></label>
+                        <div class="star-rating-input" id="star-rating-selector">
+                            <span class="star-btn" data-value="1">★</span>
+                            <span class="star-btn" data-value="2">★</span>
+                            <span class="star-btn" data-value="3">★</span>
+                            <span class="star-btn" data-value="4">★</span>
+                            <span class="star-btn" data-value="5">★</span>
+                        </div>
+                        <input type="hidden" id="entry-rating" value="5" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="entry-url">Enlace / URL <span class="required">*</span></label>
+                    <input type="url" id="entry-url" placeholder="https://..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="entry-image">URL de Imagen de Portada <span class="optional">(Opcional)</span></label>
+                    <input type="url" id="entry-image" placeholder="https://ejemplo.com/portada.jpg">
+                    <p class="form-help">Si la dejas en blanco, se generará una portada de degradado elegante automáticamente.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="entry-tags">Etiquetas (Tags) <span class="optional">(Separadas por comas)</span></label>
+                    <input type="text" id="entry-tags" placeholder="Ej: vanilla, uncensored, milf, comedia">
+                    <p class="form-help">Escribe los géneros para poder filtrar rápidamente después.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="entry-notes">Notas / Reseña <span class="optional">(Opcional)</span></label>
+                    <textarea id="entry-notes" rows="3" placeholder="¿Por qué vale la pena? ¿Capítulos favoritos? ¿Alguna advertencia?"></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-entry">Guardar en Bóveda</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Script Entrypoint -->
+    <script src="app.js"></script>
+</body>
+</html>
