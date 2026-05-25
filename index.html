@@ -25,6 +25,13 @@
                     <p class="subtitle">Solo lo mejor, filtrado y clasificado</p>
                 </div>
             </div>
+
+            <!-- User Session Control (Google Auth) -->
+            <div class="user-auth-section" id="user-auth-section">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-login">
+                    🔑 Iniciar Sesión
+                </button>
+            </div>
             
             <!-- Quick Stats Panel -->
             <div class="stats-panel" id="stats-panel">
@@ -51,7 +58,7 @@
                     <input type="text" id="search-input" placeholder="Buscar por título, tag o notas..." aria-label="Buscar enlaces">
                 </div>
                 
-                <button type="button" class="btn btn-primary" id="btn-open-modal">
+                <button type="button" class="btn btn-primary hidden" id="btn-open-modal">
                     <span class="btn-icon">＋</span> Agregar Enlace
                 </button>
             </div>
@@ -211,6 +218,7 @@
 
     <!-- Firebase SDKs Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <!-- Script Entrypoint -->

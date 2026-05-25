@@ -1,8 +1,7 @@
 /**
  * Hentai Vault - Application logic
- * Synchronizes database state in real-time using Firebase Firestore.
- * Handles CRUD operations, star ratings, interactive filters, stats,
- * and JSON backup exports.
+ * Synchronizes database state in real-time using Firebase Firestore
+ * and handles user authentication with Google Sign-In.
  */
 
 // Firebase Configuration (Credential provided by user)
@@ -18,6 +17,8 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
 const hentaisCollection = db.collection("hentais");
 
 // Initial seed data if vault is empty (so it looks "fino" at first glance)
@@ -60,6 +61,7 @@ const SEED_DATA = [
 // App State
 let appState = {
     entries: [],
+    user: null,
     filters: {
         search: "",
         category: "all",
@@ -116,6 +118,7 @@ const elements = {
    INITIALIZATION & FIRESTORE REAL-TIME SYNC
    ========================================== */
 function init() {
+    setupAuthListener();
     loadData();
     setupEventListeners();
 }
@@ -154,12 +157,98 @@ function seedDefaultData() {
 }
 
 /* ==========================================
+   FIREBASE AUTHENTICATION FLOW
+   ========================================== */
+function setupAuthListener() {
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            appState.user = user;
+            updateAuthUI(user);
+        } else {
+            appState.user = null;
+            updateAuthUI(null);
+        }
+        // Re-render when auth changes to update card actions (edit/delete)
+        render();
+    });
+}
+
+function updateAuthUI(user) {
+    const authSection = document.getElementById("user-auth-section");
+    
+    // Control elements that require authentication
+    const openModalBtn = elements.btnOpenModal;
+    const resetBtn = elements.btnResetData;
+    const importTrigger = elements.btnImportTrigger;
+    
+    if (user) {
+        // Authenticated: Render Google Profile & Logout Button
+        authSection.innerHTML = `
+            <div class="user-profile">
+                <img class="user-avatar" src="${escapeHTML(user.photoURL || 'https://www.gravatar.com/avatar/?d=mp')}" alt="Avatar">
+                <span class="user-name" title="${escapeHTML(user.displayName)}">${escapeHTML(user.displayName)}</span>
+                <button type="button" class="btn-logout" id="btn-logout" title="Cerrar Sesión">
+                    🚪
+                </button>
+            </div>
+        `;
+        document.getElementById("btn-logout").addEventListener("click", logout);
+        
+        // Show write actions
+        if (openModalBtn) openModalBtn.classList.remove("hidden");
+        if (resetBtn) resetBtn.classList.remove("hidden");
+        if (importTrigger) importTrigger.classList.remove("hidden");
+    } else {
+        // Unauthenticated: Render Google Login button
+        authSection.innerHTML = `
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-login">
+                🔑 Iniciar Sesión con Google
+            </button>
+        `;
+        document.getElementById("btn-login").addEventListener("click", loginWithGoogle);
+        
+        // Hide write actions
+        if (openModalBtn) openModalBtn.classList.add("hidden");
+        if (resetBtn) resetBtn.classList.add("hidden");
+        if (importTrigger) importTrigger.classList.add("hidden");
+    }
+}
+
+function loginWithGoogle() {
+    auth.signInWithPopup(googleProvider)
+        .then((result) => {
+            showToast(`¡Hola, ${result.user.displayName}! Sesión iniciada.`);
+        })
+        .catch((error) => {
+            console.error("Error de inicio de sesión:", error);
+            showToast("Error de inicio de sesión con Google.", "danger");
+        });
+}
+
+function logout() {
+    auth.signOut()
+        .then(() => {
+            showToast("Sesión cerrada. Ahora estás en modo lectura.");
+        })
+        .catch((error) => {
+            console.error("Error al cerrar sesión:", error);
+            showToast("Error al cerrar sesión.", "danger");
+        });
+}
+
+/* ==========================================
    EVENT LISTENERS Setup
    ========================================== */
 function setupEventListeners() {
     // Modal controls
-    elements.btnOpenModal.addEventListener("click", () => openModal());
-    elements.btnEmptyAdd.addEventListener("click", () => openModal());
+    elements.btnOpenModal.addEventListener("click", () => {
+        if (!appState.user) return showToast("Debes iniciar sesión para agregar enlaces.", "danger");
+        openModal();
+    });
+    elements.btnEmptyAdd.addEventListener("click", () => {
+        if (!appState.user) return showToast("Debes iniciar sesión para agregar enlaces.", "danger");
+        openModal();
+    });
     elements.btnCloseModal.addEventListener("click", closeModal);
     elements.btnCancelModal.addEventListener("click", closeModal);
     
@@ -207,9 +296,15 @@ function setupEventListeners() {
     
     // Backup & Restore
     elements.btnExport.addEventListener("click", exportData);
-    elements.btnImportTrigger.addEventListener("click", () => elements.importFileInput.click());
+    elements.btnImportTrigger.addEventListener("click", () => {
+        if (!appState.user) return showToast("Inicia sesión para importar copias.", "danger");
+        elements.importFileInput.click();
+    });
     elements.importFileInput.addEventListener("change", importData);
-    elements.btnResetData.addEventListener("click", resetData);
+    elements.btnResetData.addEventListener("click", () => {
+        if (!appState.user) return showToast("Inicia sesión para borrar datos.", "danger");
+        resetData();
+    });
 }
 
 /* ==========================================
@@ -286,6 +381,7 @@ function highlightStars(ratingValue, isHoverState = false) {
    ========================================== */
 function handleFormSubmit(e) {
     e.preventDefault();
+    if (!appState.user) return showToast("No autorizado para guardar datos.", "danger");
     
     const id = elements.entryId.value;
     const title = elements.entryTitle.value.trim();
@@ -342,6 +438,7 @@ function handleFormSubmit(e) {
 }
 
 function deleteEntry(id) {
+    if (!appState.user) return showToast("No autorizado para borrar.", "danger");
     if (confirm("¿Estás seguro de que quieres eliminar esta joya de tu colección?")) {
         hentaisCollection.doc(id).delete().then(() => {
             showToast("Elemento eliminado de la nube.", "danger");
@@ -430,6 +527,26 @@ function renderHeroFeatured() {
         });
     }
     
+    let actionsHtml = "";
+    if (appState.user) {
+        // Authenticated: show play and edit details buttons
+        actionsHtml = `
+            <a href="${escapeHTML(featured.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                Ver Contenido ahora ↗
+            </a>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-hero-edit">
+                ✏️ Editar Detalles
+            </button>
+        `;
+    } else {
+        // Public: only show link button taking full width
+        actionsHtml = `
+            <a href="${escapeHTML(featured.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width: 100%;">
+                Ver Contenido ahora ↗
+            </a>
+        `;
+    }
+    
     elements.heroFeatured.innerHTML = `
         <div class="hero-banner-content">
             <div class="hero-left">
@@ -443,12 +560,7 @@ function renderHeroFeatured() {
                     ${tagsHtml}
                 </div>
                 <div class="hero-actions-row">
-                    <a href="${escapeHTML(featured.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
-                        Ver Contenido ahora ↗
-                    </a>
-                    <button type="button" class="btn btn-secondary btn-sm" id="btn-hero-edit">
-                        ✏️ Editar Detalles
-                    </button>
+                    ${actionsHtml}
                 </div>
             </div>
             <div class="hero-right">
@@ -457,7 +569,10 @@ function renderHeroFeatured() {
         </div>
     `;
     
-    document.getElementById("btn-hero-edit").addEventListener("click", () => openModal(featured));
+    const heroEditBtn = document.getElementById("btn-hero-edit");
+    if (heroEditBtn) {
+        heroEditBtn.addEventListener("click", () => openModal(featured));
+    }
 }
 
 /* ==========================================
@@ -618,6 +733,29 @@ function createHentaiCard(entry) {
     const notesText = entry.notes ? escapeHTML(entry.notes) : "Sin descripción guardada.";
     const notesClass = entry.notes ? "" : "empty";
     
+    let actionsHtml = "";
+    if (appState.user) {
+        // Authenticated: full editing access
+        actionsHtml = `
+            <a href="${escapeHTML(entry.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-play">
+                Ver Contenido ↗
+            </a>
+            <button type="button" class="card-btn-icon btn-edit" title="Editar enlace">
+                ✏️
+            </button>
+            <button type="button" class="card-btn-icon btn-delete" title="Eliminar enlace">
+                🗑️
+            </button>
+        `;
+    } else {
+        // Public: only read play button taking full width
+        actionsHtml = `
+            <a href="${escapeHTML(entry.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-play" style="width: 100%;">
+                Ver Contenido ↗
+            </a>
+        `;
+    }
+    
     card.innerHTML = `
         <div class="hentai-card-banner-wrapper">
             ${bannerInnerHtml}
@@ -637,20 +775,15 @@ function createHentaiCard(entry) {
             </div>
         </div>
         <div class="card-actions">
-            <a href="${escapeHTML(entry.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-play">
-                Ver Contenido ↗
-            </a>
-            <button type="button" class="card-btn-icon btn-edit" title="Editar enlace">
-                ✏️
-            </button>
-            <button type="button" class="card-btn-icon btn-delete" title="Eliminar enlace">
-                🗑️
-            </button>
+            ${actionsHtml}
         </div>
     `;
     
-    card.querySelector(".btn-edit").addEventListener("click", () => openModal(entry));
-    card.querySelector(".btn-delete").addEventListener("click", () => deleteEntry(entry.id));
+    // Bind listeners conditionally
+    const editBtn = card.querySelector(".btn-edit");
+    const deleteBtn = card.querySelector(".btn-delete");
+    if (editBtn) editBtn.addEventListener("click", () => openModal(entry));
+    if (deleteBtn) deleteBtn.addEventListener("click", () => deleteEntry(entry.id));
     
     return card;
 }
@@ -680,6 +813,7 @@ function exportData() {
 }
 
 async function importData(e) {
+    if (!appState.user) return showToast("No autorizado.", "danger");
     const file = e.target.files[0];
     if (!file) return;
     
@@ -693,7 +827,6 @@ async function importData(e) {
                     if (confirm(`¿Quieres importar ${imported.length} enlaces? Esto reemplazará la colección en la base de datos en la nube.`)) {
                         showToast("Importando a Firebase...", "info");
                         
-                        // Clean existing documents in collection
                         const snapshot = await hentaisCollection.get();
                         const batch = db.batch();
                         snapshot.docs.forEach((doc) => {
@@ -701,7 +834,6 @@ async function importData(e) {
                         });
                         await batch.commit();
                         
-                        // Insert imported documents
                         const addBatch = db.batch();
                         imported.forEach((item) => {
                             const newDocRef = hentaisCollection.doc();
@@ -729,6 +861,7 @@ async function importData(e) {
 }
 
 async function resetData() {
+    if (!appState.user) return showToast("No autorizado.", "danger");
     const confirmation1 = confirm("⚠️ ATENCIÓN: Estás a punto de borrar TODA tu colección guardada en Firestore. ¿Deseas continuar?");
     if (confirmation1) {
         const confirmation2 = confirm("¿De verdad quieres borrar todo en la nube? Esto afectará a todos tus amigos.");
