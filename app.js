@@ -1,8 +1,24 @@
 /**
  * Hentai Vault - Application logic
- * Coordinates localStorage state, UI rendering, filters, statistics,
- * interactive star inputs, and JSON backups.
+ * Synchronizes database state in real-time using Firebase Firestore.
+ * Handles CRUD operations, star ratings, interactive filters, stats,
+ * and JSON backup exports.
  */
+
+// Firebase Configuration (Credential provided by user)
+const firebaseConfig = {
+    apiKey: "AIzaSyDBICXpTB6E0nTo6iFMG5Irh7U1ul1E0K8",
+    authDomain: "zartwlaz.firebaseapp.com",
+    projectId: "zartwlaz",
+    storageBucket: "zartwlaz.firebasestorage.app",
+    messagingSenderId: "682461122990",
+    appId: "1:682461122990:web:460e4f3ecfe4ab5afa783f"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const hentaisCollection = db.collection("hentais");
 
 // Initial seed data if vault is empty (so it looks "fino" at first glance)
 const SEED_DATA = [
@@ -97,32 +113,44 @@ const elements = {
 };
 
 /* ==========================================
-   INITIALIZATION & PERSISTENCE
+   INITIALIZATION & FIRESTORE REAL-TIME SYNC
    ========================================== */
 function init() {
     loadData();
     setupEventListeners();
-    render();
 }
 
 function loadData() {
-    const rawData = localStorage.getItem("hentai_vault_data");
-    if (rawData) {
-        try {
-            appState.entries = JSON.parse(rawData);
-        } catch (e) {
-            console.error("Error al leer localStorage, reiniciando estado.", e);
-            appState.entries = [];
+    showToast("Conectando con la base de datos...", "info");
+    
+    // Listen to firestore changes in real-time
+    hentaisCollection.onSnapshot((snapshot) => {
+        appState.entries = [];
+        snapshot.forEach((doc) => {
+            appState.entries.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+        
+        // Seed default database if empty
+        if (appState.entries.length === 0) {
+            seedDefaultData();
+        } else {
+            render();
         }
-    } else {
-        // First load: seed with default data to look rich
-        appState.entries = [...SEED_DATA];
-        saveData();
-    }
+    }, (error) => {
+        console.error("Error de conexión a Firestore:", error);
+        showToast("Error de conexión a base de datos. Verifica tus reglas de seguridad.", "danger");
+    });
 }
 
-function saveData() {
-    localStorage.setItem("hentai_vault_data", JSON.stringify(appState.entries));
+function seedDefaultData() {
+    // Write seeds to Firestore
+    SEED_DATA.forEach(entry => {
+        const { id, ...data } = entry;
+        hentaisCollection.doc(id).set(data);
+    });
 }
 
 /* ==========================================
@@ -185,7 +213,7 @@ function setupEventListeners() {
 }
 
 /* ==========================================
-   TOAST SYSTEM (NEW)
+   TOAST SYSTEM
    ========================================== */
 function showToast(message, type = "success") {
     const toast = document.createElement("div");
@@ -200,10 +228,9 @@ function showToast(message, type = "success") {
     
     elements.toastContainer.appendChild(toast);
     
-    // Animation fadeout handles destruction, but clean node after 3.3s
     setTimeout(() => {
         toast.remove();
-    }, 3300);
+    }, 3000);
 }
 
 /* ==========================================
@@ -224,7 +251,7 @@ function openModal(entryToEdit = null) {
         elements.modalTitle.textContent = "Agregar Nuevo Hentai";
         elements.form.reset();
         elements.entryId.value = "";
-        setFormRating(5); // Default to 5 stars
+        setFormRating(5);
     }
     elements.modal.classList.remove("hidden");
     elements.entryTitle.focus();
@@ -255,7 +282,7 @@ function highlightStars(ratingValue, isHoverState = false) {
 }
 
 /* ==========================================
-   FORM HANDLING & CRUD
+   FORM HANDLING & CLOUD CRUD
    ========================================== */
 function handleFormSubmit(e) {
     e.preventDefault();
@@ -267,7 +294,6 @@ function handleFormSubmit(e) {
     const url = elements.entryUrl.value.trim();
     const image = elements.entryImage.value.trim();
     
-    // Parse tags to array
     const rawTags = elements.entryTags.value;
     const tags = rawTags
         ? rawTags.split(",")
@@ -278,25 +304,24 @@ function handleFormSubmit(e) {
     const notes = elements.entryNotes.value.trim();
     
     if (id) {
-        // Edit mode
-        const index = appState.entries.findIndex(entry => entry.id === id);
-        if (index !== -1) {
-            appState.entries[index] = {
-                ...appState.entries[index],
-                title,
-                category,
-                rating,
-                url,
-                image,
-                tags,
-                notes
-            };
+        // Edit Mode: Update in Firestore
+        hentaisCollection.doc(id).update({
+            title,
+            category,
+            rating,
+            url,
+            image,
+            tags,
+            notes
+        }).then(() => {
             showToast("Hentai actualizado con éxito.");
-        }
+        }).catch((err) => {
+            console.error("Error al actualizar:", err);
+            showToast("Error al guardar cambios en Firestore.", "danger");
+        });
     } else {
-        // Create mode
-        const newEntry = {
-            id: 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+        // Create Mode: Add to Firestore
+        hentaisCollection.add({
             title,
             category,
             rating,
@@ -305,22 +330,25 @@ function handleFormSubmit(e) {
             tags,
             notes,
             dateAdded: new Date().toISOString()
-        };
-        appState.entries.unshift(newEntry);
-        showToast("¡Hentai guardado en la Bóveda!");
+        }).then(() => {
+            showToast("¡Hentai guardado en la nube!");
+        }).catch((err) => {
+            console.error("Error al agregar:", err);
+            showToast("Error al subir a la base de datos.", "danger");
+        });
     }
     
-    saveData();
     closeModal();
-    render();
 }
 
 function deleteEntry(id) {
     if (confirm("¿Estás seguro de que quieres eliminar esta joya de tu colección?")) {
-        appState.entries = appState.entries.filter(entry => entry.id !== id);
-        saveData();
-        showToast("Elemento eliminado de la Bóveda.", "danger");
-        render();
+        hentaisCollection.doc(id).delete().then(() => {
+            showToast("Elemento eliminado de la nube.", "danger");
+        }).catch((err) => {
+            console.error("Error al borrar:", err);
+            showToast("Error al eliminar de Firestore.", "danger");
+        });
     }
 }
 
@@ -331,7 +359,6 @@ function recalculateStats() {
     const total = appState.entries.length;
     elements.statTotal.textContent = total;
     
-    // Average Rating
     if (total > 0) {
         const sum = appState.entries.reduce((acc, curr) => acc + curr.rating, 0);
         elements.statAvg.textContent = (sum / total).toFixed(1);
@@ -339,7 +366,6 @@ function recalculateStats() {
         elements.statAvg.textContent = "0.0";
     }
     
-    // Favorite Tag / Genre
     const tagCounts = {};
     appState.entries.forEach(entry => {
         if (entry.tags) {
@@ -361,10 +387,9 @@ function recalculateStats() {
 }
 
 /* ==========================================
-   HERO BANNER RENDER (NEW)
+   HERO BANNER RENDER
    ========================================== */
 function renderHeroFeatured() {
-    // Only display if we have at least one 5-star rating item, and not filtering
     const hasActiveFilters = appState.filters.search !== "" || appState.filters.category !== "all" || appState.filters.activeTag !== null;
     
     if (appState.entries.length === 0 || hasActiveFilters) {
@@ -372,20 +397,18 @@ function renderHeroFeatured() {
         return;
     }
     
-    // Filter to find 5-star items
     const premiumItems = appState.entries.filter(entry => entry.rating === 5);
     if (premiumItems.length === 0) {
         elements.heroFeatured.classList.add("hidden");
         return;
     }
     
-    // Get the newest one
+    // Get newest 5 star
     premiumItems.sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));
     const featured = premiumItems[0];
     
     elements.heroFeatured.classList.remove("hidden");
     
-    // Fallback cover initials
     const initials = featured.title
         .split(" ")
         .slice(0, 2)
@@ -447,11 +470,9 @@ function render() {
     
     const filteredAndSorted = getFilteredAndSortedEntries();
     
-    // Update items display count
     const totalCount = filteredAndSorted.length;
     elements.itemsCountDisplay.textContent = `Mostrando ${totalCount} de ${appState.entries.length} enlaces`;
     
-    // Manage grid empty state
     if (appState.entries.length === 0) {
         elements.emptyState.classList.remove("hidden");
         elements.linksGrid.classList.add("hidden");
@@ -472,7 +493,6 @@ function render() {
         return;
     }
     
-    // Clean and Populate grid
     elements.linksGrid.innerHTML = "";
     filteredAndSorted.forEach(entry => {
         const cardElement = createHentaiCard(entry);
@@ -481,7 +501,6 @@ function render() {
 }
 
 function renderTagFilters() {
-    // Collect unique tags
     const allTags = new Set();
     appState.entries.forEach(entry => {
         if (entry.tags) {
@@ -496,7 +515,6 @@ function renderTagFilters() {
     
     elements.quickTagsContainer.innerHTML = "";
     
-    // Add "All tags" clear pill if one is active
     if (appState.filters.activeTag) {
         const clearPill = document.createElement("span");
         clearPill.className = "tag-pill active";
@@ -509,7 +527,6 @@ function renderTagFilters() {
     }
     
     allTags.forEach(tag => {
-        // Skip current active tag in list since we show it as a clear pill
         if (tag === appState.filters.activeTag) return;
         
         const pill = document.createElement("span");
@@ -526,7 +543,7 @@ function renderTagFilters() {
 function getFilteredAndSortedEntries() {
     let result = [...appState.entries];
     
-    // 1. Search Query filter (matches title, description, or tags)
+    // 1. Search Query filter
     if (appState.filters.search) {
         const query = appState.filters.search;
         result = result.filter(entry => {
@@ -551,13 +568,13 @@ function getFilteredAndSortedEntries() {
     result.sort((a, b) => {
         switch (appState.filters.sortBy) {
             case "rating-desc":
-                return b.rating - a.rating; // Stars from 5 to 1
+                return b.rating - a.rating;
             case "date-desc":
-                return new Date(b.dateAdded) - new Date(a.dateAdded); // Newest first
+                return new Date(b.dateAdded) - new Date(a.dateAdded);
             case "date-asc":
-                return new Date(a.dateAdded) - new Date(b.dateAdded); // Oldest first
+                return new Date(a.dateAdded) - new Date(b.dateAdded);
             case "title-asc":
-                return a.title.localeCompare(b.title); // Alphabetical A-Z
+                return a.title.localeCompare(b.title);
             default:
                 return 0;
         }
@@ -570,7 +587,6 @@ function createHentaiCard(entry) {
     const card = document.createElement("article");
     card.className = "hentai-card";
     
-    // Generate initials for the fallback cover
     const initials = entry.title
         .split(" ")
         .slice(0, 2)
@@ -578,12 +594,10 @@ function createHentaiCard(entry) {
         .join("")
         .toUpperCase();
         
-    // Check if thumbnail is provided
     let bannerInnerHtml = "";
     if (entry.image) {
         bannerInnerHtml = `<div class="card-banner" style="background-image: url('${escapeHTML(entry.image)}');"></div>`;
     } else {
-        // Fallback elegant gradient banner
         bannerInnerHtml = `
             <div class="card-banner-fallback">
                 <div class="fallback-pattern"></div>
@@ -592,10 +606,8 @@ function createHentaiCard(entry) {
         `;
     }
     
-    // Assemble Badges in Banner
     const catClass = `category-${entry.category.toLowerCase()}`;
     
-    // Generate tags markup
     let tagsHtml = "";
     if (entry.tags && entry.tags.length > 0) {
         entry.tags.forEach(tag => {
@@ -637,7 +649,6 @@ function createHentaiCard(entry) {
         </div>
     `;
     
-    // Hook up card buttons
     card.querySelector(".btn-edit").addEventListener("click", () => openModal(entry));
     card.querySelector(".btn-delete").addEventListener("click", () => deleteEntry(entry.id));
     
@@ -645,7 +656,7 @@ function createHentaiCard(entry) {
 }
 
 /* ==========================================
-   BACKUP & RESET FUNCTIONS
+   BACKUP & RESET FUNCTIONS (CLOUD-INTEGRATION)
    ========================================== */
 function exportData() {
     if (appState.entries.length === 0) {
@@ -668,23 +679,40 @@ function exportData() {
     showToast("Respaldo descargado correctamente.");
 }
 
-function importData(e) {
+async function importData(e) {
     const file = e.target.files[0];
     if (!file) return;
     
     const reader = new FileReader();
-    reader.onload = function(evt) {
+    reader.onload = async function(evt) {
         try {
             const imported = JSON.parse(evt.target.result);
             if (Array.isArray(imported)) {
-                // Quick validation of array elements
                 const isValid = imported.every(item => item.title && item.url && item.category);
                 if (isValid) {
-                    if (confirm(`¿Quieres importar ${imported.length} enlaces? Esto reemplazará tu colección actual.`)) {
-                        appState.entries = imported;
-                        saveData();
-                        render();
-                        showToast("¡Colección importada con éxito!");
+                    if (confirm(`¿Quieres importar ${imported.length} enlaces? Esto reemplazará la colección en la base de datos en la nube.`)) {
+                        showToast("Importando a Firebase...", "info");
+                        
+                        // Clean existing documents in collection
+                        const snapshot = await hentaisCollection.get();
+                        const batch = db.batch();
+                        snapshot.docs.forEach((doc) => {
+                            batch.delete(doc.ref);
+                        });
+                        await batch.commit();
+                        
+                        // Insert imported documents
+                        const addBatch = db.batch();
+                        imported.forEach((item) => {
+                            const newDocRef = hentaisCollection.doc();
+                            const { id, ...itemData } = item;
+                            addBatch.set(newDocRef, {
+                                ...itemData,
+                                dateAdded: itemData.dateAdded || new Date().toISOString()
+                            });
+                        });
+                        await addBatch.commit();
+                        showToast("¡Colección en la nube importada!");
                     }
                 } else {
                     showToast("Formato de respaldo no válido.", "danger");
@@ -693,23 +721,30 @@ function importData(e) {
                 showToast("El respaldo JSON debe ser una lista.", "danger");
             }
         } catch (err) {
-            showToast("Error al leer el archivo JSON: " + err.message, "danger");
+            showToast("Error al importar: " + err.message, "danger");
         }
-        // Reset file input so same file can be uploaded again
         elements.importFileInput.value = "";
     };
     reader.readAsText(file);
 }
 
-function resetData() {
-    const confirmation1 = confirm("⚠️ ATENCIÓN: Estás a punto de borrar TODA tu colección guardada en este navegador. ¿Deseas continuar?");
+async function resetData() {
+    const confirmation1 = confirm("⚠️ ATENCIÓN: Estás a punto de borrar TODA tu colección guardada en Firestore. ¿Deseas continuar?");
     if (confirmation1) {
-        const confirmation2 = confirm("¿De verdad quieres borrar todo? Los datos se perderán de forma permanente a menos que tengas un respaldo.");
+        const confirmation2 = confirm("¿De verdad quieres borrar todo en la nube? Esto afectará a todos tus amigos.");
         if (confirmation2) {
-            appState.entries = [];
-            saveData();
-            render();
-            showToast("Bóveda formateada por completo.", "danger");
+            try {
+                const snapshot = await hentaisCollection.get();
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                showToast("Colección en la nube vaciada.", "danger");
+            } catch (err) {
+                console.error("Error al formatear:", err);
+                showToast("Error al limpiar base de datos.", "danger");
+            }
         }
     }
 }
