@@ -11,11 +11,11 @@
     --border-color: rgba(255, 255, 255, 0.04);
     --border-hover: rgba(255, 255, 255, 0.08);
     
-    /* Elegant Emerald Green Signature Accent */
-    --accent: #10b981; 
-    --accent-hover: #059669;
-    --accent-light: #34d399;
-    --accent-glow: rgba(16, 185, 129, 0.12);
+    /* Elegant Minimalist Rose Pink Signature Accent */
+    --accent: #ec4899; 
+    --accent-hover: #db2777;
+    --accent-light: #f472b6;
+    --accent-glow: rgba(236, 72, 153, 0.12);
     
     /* Text Contrast Colors */
     --text-primary: #f9fafb;     /* High contrast white */
@@ -129,7 +129,7 @@ body {
 
 .logo-icon {
     font-size: 2.2rem;
-    filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.3));
+    filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.3));
 }
 
 .logo-text h1 {
@@ -301,8 +301,8 @@ body {
 }
 
 .tab-btn.active {
-    background: rgba(16, 185, 129, 0.08);
-    border-color: rgba(16, 185, 129, 0.15);
+    background: rgba(236, 72, 153, 0.08);
+    border-color: rgba(236, 72, 153, 0.15);
     color: var(--accent-light);
 }
 
@@ -475,8 +475,8 @@ body {
 }
 
 .hero-featured-tag {
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.15);
+    background: rgba(236, 72, 153, 0.08);
+    border: 1px solid rgba(236, 72, 153, 0.15);
     color: var(--accent-light);
     font-size: 0.68rem;
     font-weight: 700;
